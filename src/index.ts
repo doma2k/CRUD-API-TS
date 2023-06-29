@@ -1,59 +1,54 @@
 import http from 'http';
-import fs from 'fs';
+import { URL } from 'url';
+import dotenv from 'dotenv';
+import {
+  handleGetUsers,
+  handleGetUser,
+  handleCreateUser,
+  handleUpdateUser,
+  handleDeleteUser,
+} from './handlers';
 
-interface User {
-  id: string;
-  username: string;
-  age: number;
-  hobbies: string[];
-}
+dotenv.config();
+const port = process.env.SERVER_PORT;
 
-const server = http.createServer(function (req, res) {
-  const db = './src/db.json';
-  const method = req.method;
-    const id = Number(req.url?.split('/')[2]);
+const server = http.createServer(
+  async (req: http.IncomingMessage, res: http.ServerResponse) => {
+    try {
+      const url = new URL(req.url as string, `http://${req.headers.host}`);
+      const id = url.pathname.split('/')[3];
 
-  switch (method) {
-    case 'GET':
-      if (req.url === '/users') {
-        fs.readFile(db, 'utf-8', (error, data) => {
-          if (error) {
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
-            res.end('Error reading file');
-          } else {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(data);
-          }
-        });
-      } else if (id) {
-        fs.readFile(db, 'utf-8', (err, data) => {
-          if (err) {
-            res.writeHead(500, { 'Content-Type': 'text/plain' });
-            res.end('Error reading file');
-          } else {
-            const users: User[] = JSON.parse(data);
-              const user = users.find((user) => user.id === id);
-            if (user) {
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify(user));
-            } else {
-              res.writeHead(404, { 'Content-Type': 'application/json' });
-              res.end(
-                JSON.stringify({ message: `User with id: ${id} not found` })
-              );
-            }
-          }
-        });
+      if (url.pathname === '/api/users' && req.method === 'GET') {
+        await handleGetUsers(req, res);
+      } else if (
+        url.pathname.startsWith('/api/users/') &&
+        req.method === 'GET'
+      ) {
+        await handleGetUser(req, res, id);
+      } else if (url.pathname === '/api/users' && req.method === 'POST') {
+        await handleCreateUser(req, res);
+      } else if (
+        url.pathname.startsWith('/api/users/') &&
+        req.method === 'PUT'
+      ) {
+        await handleUpdateUser(req, res, id);
+      } else if (
+        url.pathname.startsWith('/api/users/') &&
+        req.method === 'DELETE'
+      ) {
+        await handleDeleteUser(req, res, id);
+      } else {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ message: 'Route not found' }));
       }
-          
-    case 'POST':
-          
-      break;
-
-    default:
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Route not found');
+    } catch (error) {
+      console.error(`Caught an error: ${error}`);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'Internal server error' }));
+    }
   }
-});
+);
 
-server.listen(8080, () => console.log('Server up, and running!'));
+server.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});
